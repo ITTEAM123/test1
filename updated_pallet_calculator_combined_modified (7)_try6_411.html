@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pallet Configuration Calculator (ES Modules)</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; }
+    .section { background: #fff; padding: 20px; margin: 20px auto; border-radius: 8px; max-width: 900px; box-shadow: 0 0 5px rgba(0,0,0,0.1);}
+    #pallet3d_diagram_1 { border: 1px solid #ccc; display: block; margin: 20px auto; }
+    table, th, td { border: 1px solid #ccc; border-collapse: collapse; }
+    th, td { padding: 6px; }
+    .btn { padding: 10px 20px; background-color: #02af50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    .btn:hover { background-color: #019c47; }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <h2>Pallet Configuration Calculator</h2>
+    <label>Pallet Length: <input id="palletLength" type="number" value="48"></label>
+    <label>Pallet Width: <input id="palletWidth" type="number" value="40"></label>
+    <label>Pallet Height: <input id="palletHeight" type="number" value="60"></label>
+    <br><br>
+    <label>SKU Length: <input id="skuLength" type="number" value="16"></label>
+    <label>SKU Width: <input id="skuWidth" type="number" value="20"></label>
+    <label>SKU Height: <input id="skuHeight" type="number" value="10"></label>
+    <label>SKU Color: <input id="skuColor" type="color" value="#4FC3F7"></label>
+    <label>SKU Count: <input id="skuCount" type="number" value="3"></label>
+    <br><br>
+    <button class="btn" id="calculateBtn">Calculate & Show 3D</button>
+  </div>
+
+  <div class="section">
+    <h3>3D Pallet Diagram</h3>
+    <canvas id="pallet3d_diagram_1" width="400" height="320"></canvas>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.150.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.150.0/examples/jsm/controls/OrbitControls.js';
+
+    // 3D rendering function (ES Modules)
+    function renderPallet3D(canvasId, palletDims, cartons) {
+      const canvas = document.getElementById(canvasId);
+      // Clean up previous renderer if any
+      if (canvas._three && canvas._three.renderer) {
+        canvas._three.renderer.dispose();
+        canvas._three = null;
+      }
+
+      // Renderer
+      const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+      renderer.setSize(canvas.width, canvas.height);
+
+      // Scene
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f0);
+
+      // Camera
+      const camera = new THREE.PerspectiveCamera(45, canvas.width / canvas.height, 0.1, 1000);
+      camera.position.set(palletDims.length, palletDims.height, palletDims.width * 2.2);
+
+      // Controls (no THREE. prefix)
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(0, palletDims.height / 2, 0);
+      controls.update();
+
+      // Lighting
+      scene.add(new THREE.DirectionalLight(0xffffff, 1).position.set(50, 100, 50));
+      scene.add(new THREE.AmbientLight(0x404040));
+
+      // Pallet base
+      const palletBaseHeight = 2;
+      const palletGeometry = new THREE.BoxGeometry(palletDims.length, palletBaseHeight, palletDims.width);
+      const palletMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+      const pallet = new THREE.Mesh(palletGeometry, palletMaterial);
+      pallet.position.y = palletBaseHeight / 2;
+      scene.add(pallet);
+
+      // Cartons (array of {x, z, length, width, height, color})
+      let yOffset = palletBaseHeight;
+      cartons.forEach(carton => {
+        const geometry = new THREE.BoxGeometry(carton.length, carton.height, carton.width);
+        const material = new THREE.MeshLambertMaterial({ color: carton.color || 0x4FC3F7 });
+        const box = new THREE.Mesh(geometry, material);
+        box.position.set(
+          -palletDims.length / 2 + carton.x + carton.length / 2,
+          yOffset + carton.height / 2,
+          -palletDims.width / 2 + carton.z + carton.width / 2
+        );
+        scene.add(box);
+      });
+
+      // Animate
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Store for cleanup
+      canvas._three = { renderer };
+    }
+
+    // Calculation logic for demo (simple grid packing)
+    function calculateCartons(palletDims, skuDims, skuCount, skuColor) {
+      const cartons = [];
+      let placed = 0;
+      const cols = Math.floor(palletDims.length / skuDims.length);
+      const rows = Math.floor(palletDims.width / skuDims.width);
+      for (let i = 0; i < cols && placed < skuCount; i++) {
+        for (let j = 0; j < rows && placed < skuCount; j++) {
+          cartons.push({
+            x: i * skuDims.length,
+            z: j * skuDims.width,
+            length: skuDims.length,
+            width: skuDims.width,
+            height: skuDims.height,
+            color: parseInt(skuColor.replace('#','0x'))
+          });
+          placed++;
+        }
+      }
+      return cartons;
+    }
+
+    // Button handler
+    document.getElementById("calculateBtn").addEventListener("click", function() {
+      const palletDims = {
+        length: parseFloat(document.getElementById("palletLength").value),
+        width: parseFloat(document.getElementById("palletWidth").value),
+        height: parseFloat(document.getElementById("palletHeight").value)
+      };
+      const skuDims = {
+        length: parseFloat(document.getElementById("skuLength").value),
+        width: parseFloat(document.getElementById("skuWidth").value),
+        height: parseFloat(document.getElementById("skuHeight").value)
+      };
+      const skuColor = document.getElementById("skuColor").value;
+      const skuCount = parseInt(document.getElementById("skuCount").value, 10);
+
+      const cartons = calculateCartons(palletDims, skuDims, skuCount, skuColor);
+
+      renderPallet3D("pallet3d_diagram_1", palletDims, cartons);
+    });
+
+    // Initial render
+    document.addEventListener("DOMContentLoaded", function() {
+      document.getElementById("calculateBtn").click();
+    });
+  </script>
+</body>
